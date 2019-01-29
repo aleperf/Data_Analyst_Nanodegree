@@ -1,0 +1,1355 @@
+---
+title: "Prosper Loans Exploratory Data Analysis"
+output: html_document
+---
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## About The Prosper Loan Dataset
+
+ The Prosper Loans dataset is a collection of data about loans provided between
+ September 2005 and March 2014 to US customers by the peer-to-peer lending 
+ company Prosper, based in San Francisco, California.
+ Prosper matches borrowers and lenders: lenders can decide to offer a loan 
+ based on  borrowers' credit scores, ratings, and the category 
+ of the loan (source: https://en.wikipedia.org/wiki/Prosper_Marketplace).
+ 
+ In this exploratory analysis I'll try to find out who are the typical Prosper
+ Loans customers, for what reasons they ask for a loan, if they are mostly able
+ to repay the loan or if they don't.
+ 
+## Library imports and first look at the dataset
+ 
+ Let's import  the csv and see how the dataframe is structured
+ 
+
+
+```{r, library_import_1, echo=FALSE, message=FALSE, warning=FALSE}
+library(ggplot2, quiet = TRUE)
+library(dplyr, quiet = TRUE)
+library(RColorBrewer, quiet = TRUE)
+library(forcats)
+```
+```{r, read_csv_2, echo=FALSE, message=FALSE, warning=FALSE}
+loans <- read.csv("prosperLoanData.csv")
+
+```
+```{r, dimensions_3, echo=FALSE, message=FALSE, warning=FALSE}
+dim(loans)
+```
+
+```{r, structure_4, echo=FALSE, message=FALSE, warning=FALSE}
+str(loans)
+```
+
+
+There are 113937 rows and 81 columns in all the dataset. 
+
+# Univariate Plots Section
+
+In this section I will explore the main variables in the dataset.
+
+### Loans Categories
+ 
+Why customers do ask for a loan at Prosper? Let's see the different loan
+categories in the Listingcategory columns. 
+The class of the column is numeric, but according to the [documentation](https://docs.google.com/spreadsheets/d/1gDyi_L4UvIrLTEC6Wri5nbaMmkGmLQBk-Yx3z0XDEtI/edit#gid=0)
+for the different columns the numbers can be mapped to different categories, so
+I'll convert the numbers to factors with the names of the categories.
+
+
+```{r, renaming_labels_5, echo=FALSE, message=FALSE, warning=FALSE}
+#labels for the categories from the documentation
+category_labels <-c("Not Available", "Debt Consolidation", "Home Improvement", "Business", "Personal Loan","Student Use",
+                     "Auto", "Other", "Baby&Adoption", "Boat", "Cosmetic Procedure", "Engagement Ring", "Green Loans",
+                     "Household Expenses", "Large Purchases", "Medical/Dental", "Motorcycle", "RV", "Taxes", "Vacation", 
+                     "Wedding Loans")
+#transform the column to factor
+loans$ListingCategory <- factor(loans$ListingCategory,labels = category_labels )
+```
+
+Let's now see how the customers are distributed in the different categories
+and plot the data.
+
+```{r, table_listing_6, echo=FALSE, message=FALSE, warning=FALSE}
+table(loans$ListingCategory)
+```
+
+```{r, plotting_listing7, echo=FALSE, message=FALSE, warning=FALSE}
+## plotting the count of customers in different categories from highest to
+#lowest
+loans %>% group_by(ListingCategory) %>% summarize(count = n()) %>% 
+ggplot(aes(x= reorder(ListingCategory, count), y=count))  +
+geom_bar(stat='identity') +
+coord_flip() +
+scale_y_continuous(trans='log10', breaks= c(0,50, 100,300,500, 1000, 2000, 5000,8000, 10000,16000, 60000))+
+theme(axis.text.x = element_text(angle = 80, hjust = 1))+
+ggtitle("Customers in Different Listing Categories") +
+ylab("Count")  +
+xlab("Category")  
+
+
+```
+
+>The plot above shows the different categories of loans in decreasing order of 
+number of requests (note that the bar lenght is proportional to the log of the 
+count). 
+The category with the highest number loan requests is "Debt Consolidation" which
+is the request of loans for repaying other loans, a sign that maybe the 
+economical situations of Prosper Loans clients is quite complicated. 
+The second and third category are unfortunately "Not Available" and "Other",
+which are clearly not very informative, a sign that for understanding better 
+this dataset other investigations are required. 
+The first significative category after "Debt Consolidation" is 
+"Home Improvement", followed by "Business" and "Auto". 
+The fact that the first category is "Debt Consolidation" and that typical
+categories for requesting a loan, like purchasing an home or student loans,
+aren't the most important in the Prosper Loans dataset, seems to indicate
+Prosper Loan could be a company specialized in offering opportunity of loans
+to users with already other kind of loans.
+
+### Number of credit lines opened
+
+Considering that the first category for requesting a loan is Debt Consolidation,
+let's now see how many credit lines Prosper customers have already opened at
+the moment the new loan was requested.
+
+```{r, summy_loans_sd_8, echo=FALSE, message=FALSE, warning=FALSE}
+# a first look the five number summary and the standard deviation
+print(summary(loans$OpenCreditLines))
+print(sd(loans$OpenCreditLines,na.rm=TRUE))
+```
+
+```{r, plotting_open_cl9, echo=FALSE, message=FALSE, warning=FALSE}
+## distribution of Open Credit Lines
+
+loans %>% filter(!is.na(OpenCreditLines))%>% ggplot(aes(x=OpenCreditLines)) + geom_histogram(binwidth=1)+
+scale_x_continuous(breaks=seq(0, 40, 2))+
+  ggtitle("Distribution of Open Credit Lines")+
+  xlab("Number of Open Credit Lines")+
+  ylab("Count")
+```
+
+
+>The graph above represents the distrubution of the number open credit lines
+at the moment the new loan was requested. It is clear that most of the clients 
+have already more than one credit line opened, the median is 9, with a standard
+deviation of about 5, and there is clearly a mode at 8. <br>
+50% of Proser Loans clients have between 6 and 12 credit lines opened and 25% 
+have 12 or more credit lines opened. The distribution is skewed to the right,
+due to a tail of customers with high number of credit lines opened.
+
+### Total Amount of the Loan
+
+How big is the typical amount of the loan? Let's look at data.
+```{r, summary_origin_amount10, echo=FALSE, message=FALSE, warning=FALSE}
+## summary of the amount of the original loan
+summary(loans$LoanOriginalAmount)
+```
+```{r, distribution_amount11, echo=FALSE, message=FALSE, warning=FALSE}
+loans %>% ggplot(aes(x=LoanOriginalAmount)) + geom_histogram(binwidth=1000,
+                                                             na.rm=TRUE) +
+scale_x_continuous(breaks=seq(1000, 35000, 1000)) +
+theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+ggtitle("Distribution of the Original Loan Amount")+
+  xlab("Loan Amount in dollars") +
+  ylab("Count")
+```
+
+> The graph above shows how the original amounts for the loans are distributed.
+Smaller loans under 7000\$ are more numerous respect to loans with higher
+amounts. In the region lower amounts there is a peak at 4000\$. 
+Locally the number of loans increases for round amounts like 10,000\$, 15,000\$,
+20,000\$ and 25,000\$.
+The lowest loans have a value of 1000\$ and the bigger ones are of 35,000$.
+For this distribution the median is a better predictor than the mean,
+infact the median is 6500\$, while the mean is 8337\$, due to the number of bigger 
+loans in the tail of the distribution.
+
+
+### Monthly loan payment
+
+How big is the montly loan payment?
+Looking at the monthly loan payment,  the summary shows
+a minimum payment of zero.
+I'm going to remove the zero values to have better estimate of how big really is
+the monthly amount for the customers who are effectively paying their debt.
+
+```{r, summary_monthly_12, echo=FALSE, message=FALSE, warning=FALSE}
+summary(loans$MonthlyLoanPayment)
+```
+
+```{r, plotting_monthly_13, echo=FALSE, message=FALSE, warning=FALSE}
+loans %>% filter(MonthlyLoanPayment > 0) %>% ggplot(aes(x=MonthlyLoanPayment)) + geom_histogram(binwidth=100)+
+scale_x_continuous(breaks=c(0, 100, 200, 300, 400, 500, 600, 1000, 
+                            1500, 2000, 3000)) +
+  
+ggtitle("Distribution of Monthly Loan Payments") +
+xlab("Monthly Loan Payment in Dollars")+
+ylab("Count")  
+```
+
+
+>The distribution of the monthly loan payments is skewed to the right, 
+with a mode around 200\$. The median of the distribution is 217.7\$.
+Most of the loans have a monthly payment below 600\$.
+
+
+
+### Income Range
+
+The income range of customers is classified in range categories, let's now see
+the number of customers in every category.
+
+```{r, income_range_14, echo=FALSE, message=FALSE, warning=FALSE}
+### levels in IncomeRange
+levels(loans$IncomeRange)
+```
+
+```{r, reordering_income_range_15,  echo=FALSE, message=FALSE, warning=FALSE}
+
+ # reordering the income levels
+income_order = c("$0", "$1-24,999", "$25,000-49,999", "$50,000-74,999","$75,000-99,999","$100,000+",
+                 "Not displayed", "Not employed" )
+
+loans$IncomeRange <- factor(loans$IncomeRange, labels = income_order)
+
+```
+
+
+```{r, plotting_income_range_16, echo=FALSE, message=FALSE, warning=FALSE}
+## plotting a bar plot of IncomeRange
+loans %>% group_by(IncomeRange) %>% 
+ggplot(aes(x= IncomeRange))  +
+xlab("Income Range")+
+geom_bar()+
+theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+> The graph above shows the Income Range for Customers. Most of them are in the
+range of income between 50,000\$ and 74,999\$ or between 74,999\$ and 99,999\$.
+Only a tiny number of customers have 0\$ of income or are not employed 
+
+
+### Debt to Income Ratio
+
+An important element for understanding the impact of the debt on the customer 
+and to predict if the debt can be ever be repaid is the debt to income ratio: 
+is the debt only a reasonable fraction of the income, or maybe is it a multiple?
+Let's see it.
+
+```{r, summary_debt_inc_ratio17, echo=FALSE, message=FALSE, warning=FALSE}
+### Proportion DebtToIncomeRatio
+###The debt to income ratio of the borrower at the time the credit profile
+#was pulled. This value is Null if the debt to income ratio is not available. 
+#This value is capped at 10.01 (any debt to income ratio larger than 1000% will
+#be returned as 1001%).
+summary(loans$DebtToIncomeRatio)
+```
+
+
+
+```{r, plotting_debt_inc_18, echo=FALSE, message=FALSE, warning=FALSE}
+
+loans %>% filter(!is.na(DebtToIncomeRatio & DebtToIncomeRatio > 0)) %>%
+ggplot(aes(x=DebtToIncomeRatio) )+
+geom_histogram(binwidth=0.05, na.rm=TRUE)+
+#introduce a sqrt transformation to make the plot more readable, 
+#in this case log will produce a warning
+scale_x_continuous(breaks=seq(0, 11, 1))+
+scale_y_continuous(trans='sqrt') +
+  ggtitle("Distribution of Debt to Income Ratio")+
+  xlab("Debt to Income Ratio") +
+  ylab("Count")
+```
+
+
+>The graph above shows how the ratio between debt and income of customers is
+distributed. Most of debts are well below the income of customers, so they
+are only a fraction of the income: for most of  customers the debt is under
+22%  of their income (the median is at 0.22 and the mean is 0.276),
+but there is a long tail of customers whose the debt
+is instead a multiple of the income, some of them have a debt 10 times bigger 
+than their income or more (there is a cap at 10 in the data).
+Considering the the maximum amount of the loan is 35,000\$ this is probably due
+to low income.
+
+
+### Loan Status
+
+At Prosper a loan can be in different statuses: it can be completed (it has
+been completely repaid), current (the customer is paying the debt on time),
+chargedoff (a status for debts unlikely to be collected), defaulted (officially
+declared not repayble), past due plus the number of days (for customers who
+ are late on payments), cancelled and lastly the loan can be in the category of 
+ the final payment. Let's see the proportion of customers in each category.
+ 
+```{r, status_props19,  echo=FALSE, message=FALSE, warning=FALSE}
+# calculate the proportion of custmors in every loan stus category
+number_of_rows = length(loans$LoanStatus)
+loans %>% group_by(LoanStatus)%>% 
+  summarize(customer_proportions = round(n()/number_of_rows, 3) )
+```
+ 
+ 
+ 
+```{r, status_props_20, echo=FALSE, message=FALSE, warning=FALSE}
+# plotting the loan status proportions
+loans %>% group_by(LoanStatus) %>%
+summarize(customer_proportions = n()/number_of_rows ) %>%
+ggplot(aes(x= reorder(LoanStatus, customer_proportions),
+           y= customer_proportions))  +
+geom_bar(stat='identity') +
+coord_flip() +
+ ggtitle("Loan Status Proportions") +
+  ylab("Proportion of Customers")+
+  xlab("Loan Status")
+  
+  
+```
+ 
+
+>The plot above shows the proportion of customers for different loan status.
+Nearly 50% of Prosper Loan clients in the dataset have a current loan going on
+and about 33% have completed their payments. The number of clients who are late
+with the payments is very tiny and near zero, but about 10% of loans are 
+considered chargedoff, meaning there is a very tiny hope the debt can be 
+collected because the client is severely delinquent on a debt (creditors will 
+make this declaration at the point of six months without payment)
+and 4% are defaulted,meaning there is even less hope for the debt to be repaid. 
+
+### Loan Duration
+
+Considering the previous plot, it seems sometimes customer are late on the
+payments, but how many months does a Prosper Loan last?
+
+```{r, table_term_21, echo=FALSE, message=FALSE, warning=FALSE}
+table(loans$Term)
+
+
+```
+
+It seems there are only three main durations for a loan: 12, 36 and 60 months.
+
+```{r, loan_duration_22, echo=FALSE, message=FALSE, warning=FALSE}
+#plotting the duration in months
+loans %>% ggplot(aes(x=Term)) + 
+geom_bar()+
+scale_x_continuous(breaks=c(12, 36, 60))+
+ggtitle("Loan Durations")+
+xlab("Duration in Months") +
+ylab("Count")
+```
+
+> The plot above shows that most of customers have a loan with a total duration
+of 36 months, the second category is 60 months and the last is 12 months.
+
+### Investors
+
+Prosper is peer-to-peer lending company: every loan can be funded by one or more 
+investors, some of them can be labeled as "friends", let'see how many investors 
+a typical loan has and how many of the loans are funded by friends.
+
+```{r, summary_investors_23, echo=FALSE, message=FALSE, warning=FALSE}
+#five number summary for the number of investors
+summary(loans$Investors)
+```
+```{r, sd_investors_24, echo=FALSE, message=FALSE, warning=FALSE}
+sd(loans$Investors)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#calculate the proportion of loans funded by just one investor
+dim(loans[loans$Investors == 1,])[1]/length(loans$Investors)
+```
+
+
+```{r plotting_investors_25, echo=FALSE, message=FALSE, warning=FALSE}
+loans %>% ggplot(aes(x=Investors)) + 
+geom_histogram(binwidth=10) +
+scale_x_continuous(breaks=c(1, 50, 100, 200, 300, 500, 800, 1000, 1100, 1200))+
+scale_y_log10() +
+  ggtitle("Distribution of the Number of Investors per Loan")+
+  ylab("Number of Investors(log10 scale)") +
+  xlab("Number of Investors")
+```
+ 
+ > The plot above shows the distribution of the number of investors per loan,
+ on the y axis the lenghts of the bar are on a log scale.
+ There is huge variability in the number of investors involved in a loan,
+ they range between a minimum of 1 to amaximum of 1189, with a notable
+ standard deviation of 100.
+ About 24% of loans are funded by just one investors, but there are loans with 
+ many investors. 
+ The plot shows a clear tendency: loans with more investors are 
+ usually less numerous than loans with less investors.
+ 
+Let's now look at the proportion of loans funded by friends.
+```{r, summary_friends_26, echo=FALSE, message=FALSE, warning=FALSE}
+table(loans$InvestmentFromFriendsCount)
+```
+
+
+```{r, friends_prop_27, echo=FALSE, message=FALSE, warning=FALSE}
+dim(loans[loans$InvestmentFromFriendsCount >= 1,])[1]/number_of_rows
+```
+About 2% of loans are funded by friends and most of them just by one friend,
+as shown by the table function on the InvestmentFromFriendsCount column.
+
+### Interest Rate
+Borrower rate can be a crytical factor for succesfully repaying a loan, let's 
+now see the the distribution of interest rates for the customers.
+
+```{r, br_rate_28, echo=FALSE, message=FALSE, warning=FALSE}
+summary(loans$BorrowerRate)
+```
+
+```{r, plotting_br_29, echo=FALSE, message=FALSE, warning=FALSE}
+loans %>% ggplot(aes(x=BorrowerRate)) +
+geom_histogram(binwidth=0.01) +
+ggtitle("Distribution of Borrower's Interest Rate")+
+xlab("Interest Rate") +
+ylab("Count")
+```
+
+> The plot above shows the interest rate for loans at Prosper. 
+The median of the distribution is at 0.1840 which is indeed quite high for
+a loan. Moreover there are local peaks for even higher interest rates over 0.25 
+and at about 0.33: such high rates are indeed illegal  for a loan in some 
+countries,not even considering the maximum rate 0.49 which is really incredibly
+high.
+
+
+### Delinquencies
+
+We saw that a high number of customers ask for a loan at Prosper for repaying
+some other debt. How many of them are already late for repaying a debt?
+How many delinquencies (not repaying a debt in time) did they have in the last
+7 years?
+
+```{r, summary_delinquencies_30,  echo=FALSE, message=FALSE, warning=FALSE}
+summary(loans$CurrentDelinquencies)
+```
+```{r, prop_delinquencies_31, echo=FALSE, message=FALSE, warning=FALSE}
+## 
+#dataframe of customers with current delinquencies
+df_curr_del <- loans[loans$CurrentDelinquencies >= 1,]
+## proportion of customers with current delinquencies
+dim(df_curr_del)[1]/number_of_rows
+```
+
+
+
+About 21% of all the customers in the dataset are late on one or more payments,
+let's now see how many "delinquencies" such customers have and how they are
+distributed.
+
+
+```{r, summary_curr_del_32, echo=FALSE, message=FALSE, warning=FALSE}
+summary(df_curr_del$CurrentDelinquencies)
+```
+
+```{r, plotting_del_33,  echo=FALSE, message=FALSE, warning=FALSE}
+#plotting the distribution of the number of delinquencies for the part
+# customers with delinquencies
+df_curr_del %>% ggplot(aes(x=CurrentDelinquencies))+
+  geom_histogram(binwidth = 1)+
+  scale_y_log10()+
+ggtitle("Distribution of delinquencies for customers
+        with at least 1 delinquency")+
+  xlab("Number of Delinquencies")+
+  ylab("Count")
+  
+```
+
+
+>The plot above shows the distribution of the number of delinquencies for
+customers with at least one delinquency.
+Most of those customers have more than one delinquency pending, but only 25% 
+of them have 3 or more.
+
+
+Let's now see at the number of delinquencies in the last 7 years. How many
+Prosper customers had delinquencies in that period?
+
+```{r, last_7_years_34, echo=FALSE, message=FALSE, warning=FALSE}
+## create dataframe for customers with delinquencies in the last 7 years
+df_del_last_7 <- loans[loans$DelinquenciesLast7Years >= 1, ]
+```
+```{r, prop_last_7_35, echo=FALSE, message=FALSE, warning=FALSE}
+#proportion of customers with delinquencies in the last 7 years
+dim(df_del_last_7)[1]/number_of_rows
+```
+
+About 33% of borrowers at Prosper had at least one delinquency in the last 7 
+year, this is in line with the main category for asking for loan which is "Debt Consolitdation"
+
+### Home ownership and employment status
+
+Generally a home is considered a good investment or a good asset for requesting
+a loan, but it can also be a source of debt. Let's now see how many customers
+are home owners.
+```{r, table_home_36, echo=FALSE, message=FALSE, warning=FALSE}
+table(loans$IsBorrowerHomeowner)
+```
+
+```{r,plotting_home_37,  echo=FALSE, message=FALSE, warning=FALSE}
+loans %>% ggplot(aes(x= IsBorrowerHomeowner))+
+  geom_bar()+
+  ggtitle("Number of Customers Home Owner and not Home Owners")+
+  scale_x_discrete(labels=c("Home Owner", "Not Home Owner"))+
+  xlab("Category of Home Ownership")+
+  ylab("Count")
+```
+
+>The plot above shows the number of home owners and not home owners: customers
+seem failry divided into the two categories.
+
+
+### Employment Status
+
+Let's now see the employment status.
+```{r, levels_empl_38, echo=FALSE, message=FALSE, warning=FALSE}
+levels(loans$EmploymentStatus)
+```
+
+There are 9 categories selectable as employment status: Employed, Full-Time,
+Not Available, Not employed, Part-time, Retired and Self-employed and
+a category with no definition, left blank for which we have no clue what it 
+could represent and therefore I'll rename it "Not available""
+```{r, recode_39, echo=FALSE, message=FALSE, warning=FALSE}
+
+loans$EmploymentStatus<-  fct_recode(loans$EmploymentStatus,
+                                     "Not available" = "")
+```
+```{r, checking_levels_40,  echo=FALSE, message=FALSE, warning=FALSE}
+levels(loans$EmploymentStatus)
+```
+
+
+
+```{r, plotting_empl_prop_41,  echo=FALSE, message=FALSE, warning=FALSE}
+loans %>% group_by(EmploymentStatus) %>%
+  summarize(proportions = n()/number_of_rows) %>%
+  ggplot(aes(x=reorder(EmploymentStatus, proportions), y=proportions)) +
+  geom_bar(stat='identity') +
+  coord_flip() +
+  ggtitle("Employment Status Proportions")+
+  ylab("proportions") +
+  xlab("Employment Status")+
+  scale_y_continuous(breaks=seq(0, 0.6, 0.05))
+```
+
+> The graph above shows the employment status for Prosper customers: most of
+them are employed,  22% define themselves full-time.
+
+### Prosper Score
+
+At every loan is associated a score with a value from 1 to 11, with 11 being
+the best, or lowest risk score.
+This score is present only for loans since
+July 2009, for previous dates the value is NA.
+Let's see how many customers there are in each category.
+
+Please note: the documentation linked above in this analysis states that for the
+variable ProsperScore the range is from 1 to 10, but according to this [link](https://www.prosper.com/plp/general-prosper_score/) on the Prosper
+website is instead form 1 to 11, which is in accord with what found in the
+data.
+```{r, summary_pr_score_42,  echo=FALSE, message=FALSE, warning=FALSE}
+summary(loans$ProsperScore)
+```
+
+
+```{r prosper_score_43, echo=FALSE, message=FALSE, warning=FALSE}
+loans %>% filter(!is.na(ProsperScore)) %>%
+  ggplot(aes(x=ProsperScore))+
+  geom_histogram(binwidth=1)+
+  scale_x_continuous(breaks=seq(1, 11, 1))+
+  ggtitle("Prosper Scores for Customers since 2009")+
+  xlab("Scores")+
+  ylab("Number of Customers")
+```
+
+> The graph above shows the Prosper Score given to customers since 2009,
+with 1 being the worst and 11 being the best. Only a tiny faction of customers
+are rated as best or worst, but a significative portion of customers have low
+ratings, with 4 being the most popular rating.
+The mean is 5.95 very close to the median of 6.
+
+
+### Estimated Loss
+
+We saw that investments in lending money at Prosper can be risky, there is 
+always a risk connected with a loan. The risk can be summarized by the so
+called Estimated Loss , which is the sum of the values of all possible losses
+multiplied for the probability of the loss occurring.
+(see [here](https://en.wikipedia.org/wiki/Expected_loss) for more details)
+Luckily there is a variable in the dataset estimating this value 
+(EstimatedLoss), let's see how it is distributed. Note:this value is applicable
+only to loans after July 2009.
+```{r}
+summary(loans$EstimatedLoss)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+loans %>% filter(!is.na(EstimatedLoss)) %>%
+  ggplot(aes(x=EstimatedLoss))+
+  geom_histogram(binwidth=0.01) +
+  ggtitle("Estimated Loss for Loans (after July 2009)")+
+  xlab("Estimated Loss Proportion")+
+  ylab("Count")
+```
+
+>The graph above shows the estimated loss for loans (a variable present only
+for loans after July 2009). Most of loans have an estimated loss below 0.10,
+the median for the distribution is 0.072, but there are a few very risky loans
+with an estimated loss over 0.3, tthe maximum is at 0.366
+
+
+
+
+# Univariate Analysis
+### What is the structure of your dataset?
+The Prosper Loans dataset consists of 113937 rows and 81 columns describing
+loans given by Prosper a peer-to-peer lending company.
+
+I have investigated in particular the variables described below:
+
+
+The **ListingCategory** column lists the categories for the loan requests,
+the most popular is Debt Consolidation", followed by "Not availble", "Other"
+and "Home Improvement".
+
+The **IncomeRange** column is used to classify customers according to their
+income: most of customer have an income over 50,000\$, the most popular
+income category is the bucket for 50,000-74,999$, but some of the customers
+have also an income of 0.
+
+The **LoanStatus** column describes in which state is the loan: most of
+loans are in the "Current"  or "Completed" category, so they are currently being
+repaid or have being totally repaid, but 10% of loans are Chargedoff (they
+are unlikely to be repaid) and 4% are defaulted(even less hope to be ever
+repaid).
+
+The **HomeOwnership** column describes if a customer owns a home: about
+50% of the customers are home owners.
+
+The **EmploymentStatus** column describes the category of employment of the
+customers: most of customers are in the category "Employed"".
+
+The **OpenCreditLines** column is a numeric variable for the number of
+current credit lines of the customer at the times the credit was pulled:
+most of customers have more than one credit line opened, with a median and a
+mean of about 9.
+
+The **LoanOriginalAmount** column lists the amount of the loan in origin: 
+it ranges between a minimum of 1000 and a maximum of 35,000\$. The most popular 
+loan is about 4,000$. Other popular loans are: 10,000\$, 15,000\$, 20,000\$ and
+25,000\$ (notably all round numbers).
+
+The **MonthlyLoanPayment** column lists the montly payment for the loan: the
+mean is 272.5 and most of payments are under 600$, though the maximum monthly
+amount is 2251.5\$.
+
+The **LoanDuration** column lists only 3 durations for the loan expressed in
+months:12, 36 or 60 (so 1, 3 or 5 years).
+
+The **DebtToIncomeRatio** column lists the ratio debt/income:
+for most of  customers the debt is under 22%  of their income (the median is
+at 0.22 and the mean is 0.276), but there is a long tail of customers whose 
+the debt is instead a multiple of the income, some of them have a debt 10 times
+bigger than their income or more (there is a cap at about 10 in the data).
+Considering the the maximum amount of the loan is 35,000\$ this is probably due
+to low income.
+
+The **Investors** column lists the number of investors for each loan.
+There is huge variability in the number of investors involved in a loan,
+they range between a minimum of 1 to amaximum of 1189, with a notable
+standard deviation of 100.
+About 24% of loans are funded by just one investors, but there are loans with 
+many investors. 
+
+The **InvestmentFromFriendsCount** column lists the number of friends who 
+funded the loan: only 2% of loans were funded by at least 1 friend.
+
+The **BorrowerRate** column lists the interest rate for every loan.
+The median of the distribution is at 0.1840  and the mean is about 0.19, which are
+quite high, moreover there are local peaks for even higher interest rates at 
+over 0.25 and at about 0.33. The maximum intererst rate is very high:0.4975.
+
+The **CurrentDelinquency** column list the number of debt for which the
+customer is late on payment: we saw that about 21% of all the customers are late
+on at least one payment.
+
+The **DelinquenciesLast7Years** column list the number of delinquencies in the
+last 7 years: nearly 33% of custmers had one delinquency in the last 7 years.
+
+The **ProsperScore** columns is the list of risk scores for borrowers, ranging
+from 1 (worst) to 11 (best). The score has been used only since July 2009.
+The mean score for Prosper customers is about 6 which also the median, only
+a minority of customers have the worst or the best score. 
+
+The **EstimatedLoss** columns lists a variable that give an estimate of the
+loss associated with the loan: it is the sum of the values of all possible 
+losses multiplied for the probability of the loss occurring.
+
+
+### What is/are the main feature(s) of interest in your dataset?
+
+The first and most interesting feature in this dataset is the ListingCategory
+of the loans, because it gives a big hint on who are the Prosper Loan Customers:
+the greatest category is "Debt Consolidation", so many users are asking for
+a loan in order to repay other debts. 
+
+Looking at the number of other credit lines opened, we saw that most of  the
+customers have more then one and that 21% of them have at least one current 
+delinquency ( that's to say they are late on the payment) and 33% had at least
+one delinquency in the last 7 years. 
+
+But why do they ask for a loan at Propser? Do Prosper have good interest rates?
+Looking at column for the interest rate the answer is a big no, 
+interest rate at Prosper are quite high, some of them are over 25%.
+If we consider the ProsperScore, rating the risks associated with the loans,
+we see that half of the customers have low scores, under 6 on a scale ranging
+from 1 to 11, where 11 is the maximum.
+So it could be that Prosper customers are in general considered risky and they
+maybe resort to requesting a loan at Prosper, despite the interest rates, 
+because they are in need of money difficult to obtain due to the risk associated
+with their profile.
+This interpretation of potentially risky borrowers may be confirmed by the data 
+in the LoanStatus column: 10% of all the loans are Chargedoff (a definition
+usually applied to debt very diffucult to collect) and 4% are defaulted (no
+hope or very tiny hopes to see the lended money again), so about 14% of
+borrowers in total had been a bad deal for the investors.
+So why do investors lend money to borrowers? 
+Again a look at the interest rate could give us a hint (but clearly not a
+definitive answer, because we may only make hypothesis): interest are very
+high, the possibility of profits maybe obscures the risks for some investors.
+The reason for lending money to borrowers seem to be friendship only for 2% of 
+the cases, as we saw analyzing the InvestmentFromFriendsCount column.
+
+### What other features in the dataset do you think will help support your \
+investigation into your feature(s) of interest?
+In the next part of the analysis I'll try to see how the original 
+amount of the loan is influenced by home ownership and employment status
+and what are the features that are associated with more risky loans.
+
+
+### Of the features you investigated, were there any unusual distributions? \
+Did you perform any operations on the data to tidy, adjust, or change the form \
+of the data? If so, why did you do this?
+
+I reordered the levels in the IncomeRange columns to have more consistency
+in plotting, ordering them from lowest to highest.
+
+I used a square root transformtion for plotting the debt to income ratio, 
+because most of the ratios are below 0.5, but the scale on the x axis ranges
+from 0 to 10, so the high number of loans in the very first section of the
+plot was obscuring the loans with very high ratios and low numbers
+on the right side of the plot (they were impossible to see), 
+but with the transformation they had become visible again.
+
+I used a log10 transformation on the y axis for the plot of the distribution of
+the number of investors and of the current delinquencies, because a very high
+number of loans transformation are on the left part of the plot, obscuring the
+right side with a lower number of loans, but after the transformation they
+were visible again.
+
+I incorporeted one of the levels for the EmploymentStatus column in
+"Not available" because it was simply listed as "" (empty string).
+
+
+# Bivariate Plots Section
+
+
+### Which category of loans receives more loans?
+We saw that one of the main category of loans is "Debt Consolidation",
+but is it also the more funded? Let'see it.
+
+```{r, loan_vs_listing_cat_44, echo=FALSE, message=FALSE, warning=FALSE}
+loans %>% group_by(ListingCategory) %>% 
+ggplot(aes(x= reorder(ListingCategory, LoanOriginalAmount, FUN = median), 
+           y= LoanOriginalAmount))+
+geom_boxplot()+
+scale_y_continuous(breaks=seq(0, 35000, 1000))+
+theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+ggtitle("Loan Original Amount per Listing Category")+
+xlab("Listing Category")+
+ylab("Loan Original Amount in $")+
+coord_flip()
+```
+
+> In the plot above the various listing categories for loans are listed
+in order of the median for the amount of the loan. So the plot represents
+from top to down the categories that are more likely to obtain bigger loans.
+Again "Debt Consolidation" is on top, so it is likely to obtain bigger loans,
+but as surprise when it comes to the amount of the loans new categories emerge,
+the second one is Baby&Adoption and the third is Wedding Loans.
+The undescript loans listed in "Other" or "Not Available" are now much less
+important in this graph. Students get the lowest loans.
+
+
+### Home Ownership and Loan Amount
+
+Do Home Owners get bigger loans? A home is a sort a guarantee, so we expect
+the answer to be yes.
+```{r, loan_vs_home_45, echo=FALSE, message=FALSE, warning=FALSE}
+loans %>% group_by(IsBorrowerHomeowner) %>% 
+ggplot(aes(x= reorder(IsBorrowerHomeowner, LoanOriginalAmount, FUN = median),
+           y= LoanOriginalAmount))+
+geom_boxplot()+
+scale_y_continuous(breaks=seq(0, 35000, 1000))+
+scale_x_discrete(labels=c("Not Owner", "Home Owner"))+
+ggtitle("Loan Original Amount for Home Owner and Not Owners")+
+ylab("Loan Original Amount in $")+
+xlab("Homeownership")
+```
+
+> The plot above represents the loan original amount for the categories of
+home owners and not home owners. It is clear home owners get the bigger loans,
+so our expectations are confirmed.
+
+### Original Amount of the Loan for Employment Status
+
+Who will get the bigger loans? Employed, Full-time or Self-Employed?
+```{r, loan_v_employment_46, echo=FALSE, message=FALSE, warning=FALSE}
+loans %>% group_by(EmploymentStatus) %>% 
+ggplot(aes(x= reorder(EmploymentStatus, LoanOriginalAmount, FUN = median),
+           y= LoanOriginalAmount))+
+geom_boxplot()+
+scale_y_continuous(breaks=seq(0, 35000, 1000))+
+theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+ggtitle("Loan Original Amount for Employment Status")+
+ylab("Loan Original Amount")+
+xlab("Employment Status")
+```
+
+> The plot above shows, as expected, that Employed borrowers are more likely
+to get bigger loans, followed by Self-Employed and Full-time.
+Not-employed seem to receive bigger loans respect to Part-Time and Retired,
+and this is a bit surprisingly, but it could also due to a minor propension
+of such categories to ask for bigger loans.
+
+### Loan Amount for different customers Income Ranges
+
+Do customers with higher incomes ask for bigger loans?
+```{r, loan_v_income_range_47, echo=FALSE, message=FALSE, warning=FALSE}
+loans %>% group_by(IncomeRange) %>% 
+ggplot(aes(x= reorder(IncomeRange, LoanOriginalAmount, FUN = median), y= LoanOriginalAmount))+
+geom_boxplot()+
+scale_y_continuous(breaks=seq(0, 35000, 1000))+
+theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+ggtitle("Loan Original Amount for Income Range")+
+ylab("Loan Original Amount in $ ")+
+xlab("Income Range")
+```
+
+
+> The plot above shows the Income Range for customers ordered according to 
+increasing median for the amount of the original loan. 
+The category of Income Range that  obtain bigger loans is the one between 
+25,000-49,999\$, while the richest category for income range, over 100,000\$
+is only second.
+
+
+### Loan Original Amount for Loan Status
+
+Defaulted and Chargedoff loans were bigger than the other loans?
+Let's see it.
+
+```{r, loan_v_loan_status_48, echo=FALSE, message=FALSE, warning=FALSE}
+loans %>% group_by(LoanStatus) %>% 
+ggplot(aes(x= reorder(LoanStatus, LoanOriginalAmount, FUN = median), y= LoanOriginalAmount))+
+geom_boxplot()+
+scale_y_continuous(breaks=seq(0, 35000, 1000))+
+theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+ggtitle("Loan Original Amount for Loan Status")+
+ylab("Loan Original Amount in $ ")+
+xlab("Loan Status")
+```
+
+
+> The plot above show the loan original amount for loan status.
+The plot is really interesting because Defaulted, ChargedOff and Completed Loans
+seem to have approximately the same distribution, so customers who in the end
+haven't been able to repay the debt didn't ask for bigger loans respect to
+customers who instead have already finished to pay. 
+
+### Interest Rate and Loan Status
+
+We saw that the loan original amount seem to be not very influential in
+determining the loan status, because completed, defaulted and chargedoff
+loans were on a very similare range of amounts, but maybe the interest rate
+could be different for those categories and make a difference for the 
+success of loan, meaning for success not ending in chargedoff,defaulted or
+in a delinquent status.
+
+```{r, int_loan_sta_100, echo=FALSE, message=FALSE, warning=FALSE}
+loans %>% group_by(LoanStatus) %>% 
+ggplot(aes(x= reorder(LoanStatus, BorrowerRate, FUN = median
+                      ),
+           y= BorrowerRate))+
+geom_boxplot()+
+theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+ggtitle("Interest Rate for LoanStatus")+
+ylab("Interest Rate")+
+xlab("Loan Status")
+```
+
+>The plot above shows the interest rate for loan status, sorted in increasing
+order of the median. The graph this time is really interesting because all 
+the so called "delinquencies", charged off and defualted loans seem to have
+a bigger interest rate respect to the completed, current or with final pyament
+in progress loans, so interest rate could be really important in 
+determining the success of the loan.
+
+### Correlation Between Borrower Rate and Amount of the Loan
+
+Interest rate at Prosper have a great variabilty: they range from low to 
+very high values. How the original amount is correlated to the Interest Rate?
+Let' first calculate the correlation.
+
+```{r, origin_corr_br_49, echo=FALSE, message=FALSE, warning=FALSE}
+with(loans,cor.test(LoanOriginalAmount, BorrowerRate))
+```
+
+It seems the loan original amount is only  moderately negatively correlated to
+the Borrower Rate (or interest rate for the borrower).
+Let's see it in plot.
+
+```{r, original_corr_br_50, echo=FALSE, message=FALSE, warning=FALSE}
+loans %>% ggplot(aes(x=BorrowerRate, y=LoanOriginalAmount))+
+scale_y_continuous(trans='log10') +
+geom_jitter(alpha=0.05,fill = I("steelblue1"), color=I("black"), shape=21)+
+  stat_smooth(method='lm', color=I("red"))+
+  ggtitle("Interest Rate vs Loan Original Amount") +
+  xlab("Interest Rate")+
+  ylab("Original Amount of The Loan")
+```
+
+>The plot above show the Original Amount of the Loan. There are many points,
+but it is possible to notice that as the interest rate increases, the amount
+of the loan seem to decrease (there are less points in the upper corner
+of the plot), the red line on the plot shows the general trend.
+
+
+### Interest Rate versus Debt To Income Ratio
+
+Maybe there are other factors that are more influent on the Interest Rate, it
+would be logical to expect that higher Debt to Income Ratio would be 
+considered more risky, with probably higher interest rates.
+Let's see if it's true, first calculating the correlation between the
+two variables
+
+```{r, corr_51, echo=FALSE, message=FALSE, warning=FALSE}
+
+with(loans,cor.test(DebtToIncomeRatio, BorrowerRate))
+
+```
+
+There is a very weak positive correlation between the two variables,
+so it seems that the borrower rate isn't very important in
+determining the Interest Rate for the loan.
+
+```{r, plotting_corr_52, echo=FALSE, message=FALSE, warning=FALSE}
+loans %>% ggplot(aes(x=BorrowerRate, y=DebtToIncomeRatio))+
+geom_jitter(alpha=0.5, fill=I("steelblue1"), color=I("black"), shape=21)+
+  ggtitle("Debt to Income Ratio versus Interst Rate")+
+  stat_smooth(method='lm', color=I("red"))+
+  xlab("Interest Rate")+
+  ylab("Debt to Income Ratio")
+```
+
+> The plot above shows the nearly absent correlation for Interest Rate
+and Debt to Income Ratio, the red line is nearly horizontal.
+
+```{r, corr_loss_53, plotting_corr, echo=FALSE, message=FALSE, warning=FALSE}
+with(loans,cor.test(MonthlyLoanPayment, OnTimeProsperPayments))
+```
+
+### Estimated Loss and Interest Rate
+
+The estimated loss is a measure of the possible loss of money associated with
+the loan, so it is possible it could influence the interest rate.
+Let's see the plot of Estimated Loss against Borrower rate and calculate
+their correlation.
+```{r, corr_coeff_54, plotting_corr, echo=FALSE, message=FALSE, warning=FALSE}
+with(loans,cor.test(BorrowerRate, EstimatedLoss))
+```
+
+The correlation here is really high, 0.945 so we expect the loan to have higher
+interest rates associated at high estimated losses.
+
+```{r, loss_vs_br_55, echo=FALSE, message=FALSE, warning=FALSE }
+loans %>% filter(!is.na(EstimatedLoss)) %>%
+  ggplot(aes(x=EstimatedLoss, y=BorrowerRate))+
+geom_jitter(alpha=0.5, fill=I("steelblue1"), color=I("black"), shape=21)+
+stat_smooth(method='lm', color=I("red"))+
+ggtitle("Interest Rate versus Estimated Loss") +
+xlab("Estimated Loss") +
+ylab("Interest Rate")  
+  
+```
+
+
+>The plot above shows the Interest Rate versus the Estimated Loss, as the 
+estimated loss increases it is clear that also the Interest Rate increases.
+Note: the estimated loss variable is present only for data after July 2009.
+
+```{r,corr_56,   echo=FALSE, message=FALSE, warning=FALSE}
+with(loans,cor.test(LoanOriginalAmount, EstimatedLoss))
+```
+There is a moderate negative correlation between the estimated loss and the 
+original amount of the loan.
+
+Let's plot the estimated loss against the original amount of the loan
+
+```{r, corr_57,  echo=FALSE, message=FALSE, warning=FALSE}
+loans %>% filter(!is.na(EstimatedLoss)) %>%
+  ggplot(aes(x=LoanOriginalAmount, y=EstimatedLoss))+
+geom_jitter(alpha=0.5, fill=I("steelblue1"), color=I("black"), shape=21)+
+stat_smooth(method='lm', color=I("red"))+
+ggtitle("Estimated Loss versus Original Amount of the Loan") +
+xlab("Loan Amount in dollars") +
+ylab("Estimated Loss") 
+
+```
+
+> The plot above shows the estimated loss against the original amount of the 
+loan. It seems bigger loans over 15,000\$ are obtained only when the estimated
+loss is under 0.1 and for the loans over 25,000$ (25,000 not included)
+when loss is mostly under 0.05.
+
+
+# Bivariate Analysis
+### Talk about some of the relationships you observed in this part of the \
+investigation. How did the feature(s) of interest vary with other features in \
+the dataset?
+
+### Did you observe any interesting relationships between the other features \
+(not the main feature(s) of interest)?
+
+In this section I tried to understand what are the variables influencing
+the loan original amount and the interest rate, two elements that are 
+really important for borrowers and in determinig the success of the loan,
+meaning for success a loan that is repaid completely.
+I therefore considered home ownership,employment status and the
+the income range of the borrowers.
+
+Considering the distribution of the loan, the first three bigger
+categories are "Debt Consolidation", "Baby&Adoption" and "Wedding Loans".
+
+The borrowers seem to be nearly fairly divided in home owners and not home
+owners, but we saw that home owners get bigger loans.
+
+Considering instead the employment status, "Employed" and "Self-Employed" 
+seem to get loans bigger than other categories, with  "Part-Time" wokers 
+getting instead the lowest ones.
+
+Considering the income range of the borrowers the bigger loans are obtained
+by the customers in the range of 25,000 - 49,999$ and and then by the 
+customers in the highsest range of income (over 100,000$).
+Customers who didn't declared their income obtain in general lower loans.
+
+Looking at the loan original amount and confronting it with the
+status of the loan, I've found something interesting: I would expect that 
+loans in a bigger range of amount would be more likely to end up as defaulted 
+or chargedoff, instead I saw that the distribution of amount for defaulted and
+chargedoff loans was very similar to the one of the completed loans, meaning
+that in itself the total amount of the loan isn't so important as I could have
+expected.
+
+Confronting the Interest Rate with the Loan Status i foudn again something
+intersting: the interest rate is very critical for determining the success of
+the loan, infact all the status associated with problems (delinquencies,
+chargedoff and defaulted) had a distribution of interest rate shifted towards
+higher values respect to the ones that were on time with payments or completed.
+
+Plotting the interest rate against the loan original amount I saw that 
+bigger loans tend to have lower interest rate, while there is nearly no
+correlation between the interest rate and the debt to income ratio.
+
+A critical factor in determining the interest rate rate seems to be the
+estimated loss associated with the loan, at lower interest estimated losses
+correspond lower interest rates and as the estimated loss increases so increases
+the interest rate.
+
+Lastly there is moderate negative correlation between the estimated loss and
+original amount of the loan: the bigger loans over 25,000$ seem to have lower
+estimated loss mostly below 0.05
+
+### What was the strongest relationship you found?
+The strongest relationship that I found was a strong positive correlation of
+0.945 between the interest rate and the estimated loss for the loan.
+
+# Multivariate Plots Section
+
+### Loan Original Amount versus Interest Rate per Employment Status for home
+### owner and not home owners
+
+We saw earlier that the employmente status seems to 
+influence the original amount of the loan in favor of employed and self-employed
+customers, let's now see how the combination
+of borrower rate and original amount of the loan differ for different employment
+status and how many home owner there are in each category of employment.
+```{r, renaming_58,  echo=FALSE, message=FALSE, warning=FALSE}
+loans$IsBorrowerHomeowner <-factor(loans$IsBorrowerHomeowner, 
+                                   labels=c("Not Owner", "Home Owner"))
+```
+
+```{r multi_59, echo=FALSE, message=FALSE, warning=FALSE}
+loans %>% 
+ggplot(aes( x=BorrowerRate,y=LoanOriginalAmount, color=IsBorrowerHomeowner))+
+geom_jitter()+
+facet_wrap(~ EmploymentStatus, ncol=3)+
+  scale_color_brewer(type = 'div', palette="Set1",
+                     guide = guide_legend(title = 'Home Ownership'))+
+  ggtitle("Loan Amount versus Interest Rate per Employment Category for Home
+          Owners and not Home Owners")+
+  ylab("Loan Amount in dollars")+
+  xlab("Interest Rate")
+  
+
+```
+
+> The graph above shows the Loan Amount versus the Interest Rate for 
+different working categories.
+As we saw earlier Employed have the higher loans, but now we
+see that those higher loans come with lower interest rate and that between
+those who obtain higher loans at low rates there are mostly home owners.
+Not employed get lower loans and they are mostly not home owners, but even
+between not employed home owners get the highest loans of the category.
+Part-time workers have as well lower loans and they are mostly not home owners.
+We saw earlier that Self-Employed were the second classified in obtainig 
+bigger loans, and the plot shows that those who obtain bigger loans at low
+rates are mostly home owners. It seems home ownership is influential
+in obtaining higher loans at lower rates.
+
+### Prosper Score and Intest Rates for Home Owners and Not Home Owners
+
+Let's see how the combination of Prosper Score and Interest Rate differs
+between Owners and Not Home Owners.
+The Prosper score is a value between 1 and 11 measuring the reliability of
+the borrower with 1 being the worst and 11 being the best.
+
+```{r, multi_60, echo=FALSE, message=FALSE, warning=FALSE}
+loans %>% ggplot(aes(x=BorrowerRate, y=ProsperScore,color=IsBorrowerHomeowner))+
+scale_color_brewer(type = 'div', palette="Set1",
+                     guide = guide_legend(title = 'Home Ownership'))+
+
+scale_y_continuous(breaks=seq(0, 11, 1))+
+geom_jitter(alpha=0.5)+
+ggtitle("Prosper Score versus Interest Rate for Home Owners and
+         not Home Owners")+
+ylab("Prosper Score")  +
+xlab("Interest Rate")  
+
+```
+
+
+
+>The plot above represents the Proseper Score (ranging from 1 to 11 with
+1 being the worst and 11 being the best) versus interest rates.
+As we saw earlier only a minority of customers get the highest score of 11,
+for those customers the interest rate is mostly below 0.15 and they seem to be
+mostly home owners. In general the right side of each category, with highest
+interest rates, seem to be more red, the color associated with not home 
+owners.
+
+
+### Monthly Loan Payment versus Interest Rate for ChargedOff, Defaulted,
+### Completed and Current loans for Home Owners and Not Home OWners.
+
+I'm going to plot the Monthly Loan Payment versus Interest Rate for four 
+categories: the Defaulted and Chargedoff (representing bad loans) loans, and
+Completed and Current (loans being paid) loans.
+
+
+
+
+```{r, multi_61, echo=FALSE, message=FALSE, warning=FALSE}
+categories = c("Cancelled","FinalPaymentInProgress",
+               "Past Due (>120 days)","Past Due (1-15 days)",
+               "Past Due (16-30 days)" ,"Past Due (31-60 days)",
+               "Past Due (61-90 days)", "Past Due (91-120 days)")
+
+
+
+loans %>% filter(!(LoanStatus %in% categories)) %>%
+ggplot(aes( x=BorrowerRate,y=MonthlyLoanPayment, color=IsBorrowerHomeowner))+
+geom_jitter()+
+facet_wrap(~ LoanStatus, ncol=2)+
+  scale_color_brewer(type = 'div', palette="Set1",
+                     guide = guide_legend(title = 'Home Ownership'))+
+  ggtitle("Monthly Loan Payment versus Interest Rate per Loan Status
+for Home Owners and not Home Owners")+
+  ylab("Montly Loan Payment in dollars")+
+  xlab("Interest Rate")
+```
+
+
+> The plot above shows the montly loan payment versus the interest rate for
+four categories of loans : ChargedOff, Completed, Current and Defaulted,
+showing at the same time home owners and not home owners.
+It is interesting to note that on the right side of every plot, where there
+are the highest interest rates for every category there are more red dots,
+so more not home owners, while on left side there are always more blue, so home
+owners. The plot for the current loans shows that in this category there
+more loans with higher monthly paymetns at lower interest rates and they are
+mostly of home owners.
+
+
+
+# Multivariate Analysis
+
+In the previous section of the analysis I saw that the interest rate was
+critical for the success of the loan, in this section I have investigated
+how interest rate and home ownership are related to employment status, 
+current status of the loan and to score given by Prosper to customers.
+
+Plotting the loan amount versus the interest rate for different working 
+categories, I saw that home owners were more likeky to obtain higher loans
+at low interest rates, while between part-time workers, who obtain the 
+lower loans, there were mostly not home owners
+
+Plotting the Prosper Score against Interst Rate and coloring home owners and not
+home owners differently, showed that home owners are the ones more likeky to
+obtain the highest score. In general in every category of score, those with
+higher interest rates were mostly not home owners.
+
+Plotting the monthly loan payment versus interest rate for four categories
+(Defaulted,Chargedoff, Completed and Current) showed that again in every
+category home owners got the lowest interest rates while for high interest rates
+not home owners were mostly present.
+
+
+# Final Plots and Summary
+
+### Plot One - Loan Status Proportions
+
+ 
+```{r, plot_one, echo=FALSE, message=FALSE, warning=FALSE}
+# plotting the loan status proportions
+loans %>% group_by(LoanStatus) %>%
+summarize(customer_proportions = n()/number_of_rows ) %>%
+ggplot(aes(x= reorder(LoanStatus, customer_proportions),
+           y= customer_proportions))  +
+geom_bar(stat='identity') +
+coord_flip() +
+ ggtitle("Loan Status Proportions") +
+  ylab("Proportion of Customers")+
+  xlab("Loan Status")
+  
+  
+```
+
+### Description One
+The fist plot describes the current status of the loan for Prosper
+Loans borrowers, showing the proportions of client for each category.
+About 10% of the customers have a chargedoff loan (a declaration for loans
+unlikely to be collected) and 4% are defaulted (so is nearly impossible the
+debt will be every repaid). So 14% of the loans at Prosper turned to be
+bad investement for the lenders. I have chosen this plot because I think 
+illustrates well this kind of investment can be risky.
+
+### Plot Two - Interst Rate for Loan Status
+```{r plot_two, echo=FALSE, message=FALSE, warning=FALSE}
+loans %>% group_by(LoanStatus) %>% 
+ggplot(aes(x= reorder(LoanStatus, BorrowerRate, FUN = median
+                      ),
+           y= BorrowerRate))+
+geom_boxplot()+
+theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+ggtitle("Interest Rate for LoanStatus")+
+ylab("Interest Rate")+
+xlab("Loan Status")
+```
+
+### Description Two
+The second plot describes the distribution of the interest rates for different 
+loan statuses sorted in ascending order of the median.
+It is interesting to note that the distributions of interest rate for loans 
+in bad categories (chargedoff, defaulted or late on the payments) are all 
+shifted towards higher values than the ones for the completed, current
+on with final payment in progress. So interest rates may have an influence 
+on a loan investement turning bad or good.
+
+### Plot Three - Loan Amount versus Interest Rate per Employment Category for 
+### Home Owners and not Home Owners
+
+```{r plot_3, echo=FALSE, message=FALSE, warning=FALSE}
+loans %>% 
+ggplot(aes( x=BorrowerRate,y=LoanOriginalAmount, color=IsBorrowerHomeowner))+
+geom_jitter()+
+facet_wrap(~ EmploymentStatus, ncol=3)+
+  scale_color_brewer(type = 'div', palette="Set1",
+                     guide = guide_legend(title = 'Home Ownership'))+
+  ggtitle("Loan Amount versus Interest Rate per Employment Category for Home
+          Owners and not Home Owners")+
+  ylab("Loan Amount in dollars")+
+  xlab("Interest Rate")
+  
+
+```
+
+
+
+### Description Three
+
+The third plot shows the Original Amount of the Loan versus the interest
+rate for employment status of the borrowers. 
+We saw that loans can be risky at Prosper, so this plot shows who are the
+borrowers who are likely to get the best loans, the ones with high amount
+and low rates, so the loans given to the borrowers probably less risky. 
+As expected the higher loans go to the Employed Category,
+who have most of the loans over 20,000\$ with relatively low rates.
+The borrowrers in the employed category are mostly home owners, a sign maybe
+that the ownership of a home is good asset for obtaining a loan.
+The "Not employed" and the "Part-Time Category" are mostly composed of not
+owners and most of their loans are under 10,000$.
+Self-employed who are also home owners seem to get again higher loans at lower
+rates, while in the Full-time caegory home ownership seem important for
+obtaining higher loans, but not lower rates, because home owners who have
+the highest loans have interest rates across all the range.
+
+
+#Reflection
+
+The Prosper Loans dataset contains informations over more than 113,000 loans 
+requested to Prosper, a peer-to-peer landing company based in San Francisco, 
+California, between 2005 and 2014.
+The main category for request of loans at Prosper is "Debt Consolidation",
+so many borrowers ask for a loan in order to repay other debts.
+The amount of the loan requested present int the dataset is between
+1,000\$ and 35,000\$ and the debt can be repaid in 12, 36 or 60 months.
+At every loan is associated a status: 10% of the loans are considered
+chargedoff, while 4% are defaulted, so at least 14% of all the debt turned
+to be bad investments for the lenders.
+The interest rate for a loan at Prosper seem to be very high, the median being
+around 0.18 and the mean at around 0.19, but it can potentially be as high as 
+nearly 0.50 (which is illegal for a loan in many countries).
+In my analysis I saw that the interest rate may bevery important in determining
+the success of a loan and that at loans with a lower estimated loss
+is also associated a lower interest rate.
+About half of the Prosper Loans Customers are also home owners and 
+home owners seem to shine between borrowers: they in general tend to have
+higher loans at lower rates, this rend is more evident forborrowers 
+who are employed or self-employed.
+
+My investigation across this dataset has indeed many limits: this is certainly
+only a fraction of all the transactions at Prosper and I have not many
+information on how the data has been pulled from the Prosper database.
+I found a range for the loans between 1,000\$ and 35,000\$, but I don't
+know if this is really a cap for the minimum and maximum for loans or only
+a choice made by who created the original csv file.
+Some of the variables like the Prosper Score are present only for loans after
+the year 2009.
+Moreover we are in 2019 and the last record in the dataset is from 2014, so
+many factors as interest rates or distributions of incomes, and so on,
+may be different in the present.
+
+My evaluation about eventual risk associated with the loans are relative
+only to this data that may be incomplete.
